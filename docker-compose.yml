@@ -1,26 +1,35 @@
+version: '3.8'
+
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bolt}
+      POSTGRES_USER: ${POSTGRES_USER:-bolt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bolt_password_change_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bolt} -d ${POSTGRES_DB:-bolt}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   bolt:
     build: .
     ports:
       - '3005:3000'
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      # Optional debug level
-      - VITE_LOG_LEVEL=${VITE_LOG_LEVEL:-info}
-      # Add SESSION_SECRET with a default value
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-bolt}:${POSTGRES_PASSWORD:-bolt_password_change_in_production}@postgres:5432/${POSTGRES_DB:-bolt}}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SESSION_SECRET=${SESSION_SECRET:-bolt-super-secret-session-key-change-in-production-12345}
-    env_file:
-      - .env.local
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
-    volumes:
-      # Persist the SQLite database file
-      - ./prisma/dev.db:/app/prisma/dev.db
-      # Persist Prisma migrations
-      - ./prisma/migrations:/app/prisma/migrations
-    healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000']
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+
+volumes:
+  postgres_data:

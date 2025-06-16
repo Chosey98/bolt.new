@@ -26,9 +26,9 @@ RUN pnpm run build
 # Production stage
 FROM node:20-alpine AS production
 
-# Install pnpm globally, wget for health checks, and OpenSSL for Prisma
+# Install pnpm globally, wget for health checks, OpenSSL for Prisma, and PostgreSQL client
 RUN npm install -g pnpm@9.4.0 && \
-    apk add --no-cache wget openssl
+    apk add --no-cache wget openssl postgresql-client
 
 # Set working directory
 WORKDIR /app

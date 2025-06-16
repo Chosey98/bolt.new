@@ -40,6 +40,7 @@ type ElementFactory = (props: ElementFactoryProps) => string;
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
   artifactElement?: ElementFactory;
+  shouldExecuteActions?: boolean;
 }
 
 interface MessageState {
@@ -53,8 +54,11 @@ interface MessageState {
 
 export class StreamingMessageParser {
   #messages = new Map<string, MessageState>();
+  shouldExecuteActions: boolean;
 
-  constructor(private _options: StreamingMessageParserOptions = {}) {}
+  constructor(private _options: StreamingMessageParserOptions = {}) {
+    this.shouldExecuteActions = _options.shouldExecuteActions ?? true;
+  }
 
   parse(messageId: string, input: string) {
     let state = this.#messages.get(messageId);

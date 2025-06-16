@@ -1,4 +1,4 @@
-import { cloudflareDevProxyVitePlugin as remixCloudflareDevProxy, vitePlugin as remixVitePlugin } from '@remix-run/dev';
+import { vitePlugin as remixVitePlugin } from '@remix-run/dev';
 import UnoCSS from 'unocss/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -14,8 +14,8 @@ export default defineConfig((config) => {
       nodePolyfills({
         include: ['path', 'buffer'],
       }),
-      config.mode !== 'test' && remixCloudflareDevProxy(),
       remixVitePlugin({
+        serverBuildFile: 'index.js',
         future: {
           v3_fetcherPersist: true,
           v3_relativeSplatPath: true,

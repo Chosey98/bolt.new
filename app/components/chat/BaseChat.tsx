@@ -25,6 +25,7 @@ interface BaseChatProps {
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   enhancePrompt?: () => void;
+  isReadOnly?: boolean;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -54,6 +55,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleInputChange,
       enhancePrompt,
       handleStop,
+      isReadOnly = false,
     },
     ref,
   ) => {
@@ -79,6 +81,21 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <p className="mb-4 text-center text-bolt-elements-textSecondary">
                   Bring ideas to life in seconds or get help on existing projects.
                 </p>
+                {isReadOnly && (
+                  <div className="mt-6 p-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg">
+                    <p className="text-center text-bolt-elements-textSecondary mb-3">
+                      You're viewing Bolt as a guest. To start creating and chatting:
+                    </p>
+                    <div className="flex justify-center">
+                      <a
+                        href="/login"
+                        className="px-4 py-2 text-sm bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded"
+                      >
+                        Sign In
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div
@@ -106,12 +123,28 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <div
                   className={classNames(
                     'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
+                    { 'opacity-50': isReadOnly },
                   )}
                 >
+                  {isReadOnly && (
+                    <div className="px-4 py-2 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
+                      <p className="text-sm text-bolt-elements-textSecondary">
+                        This is a read-only view.{' '}
+                        <a href="/login" className="text-bolt-elements-textAccent hover:underline">
+                          Log in
+                        </a>{' '}
+                        to continue the conversation.
+                      </p>
+                    </div>
+                  )}
                   <textarea
                     ref={textareaRef}
                     className={`w-full pl-4 pt-4 pr-16 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
                     onKeyDown={(event) => {
+                      if (isReadOnly) {
+                        return;
+                      }
+
                       if (event.key === 'Enter') {
                         if (event.shiftKey) {
                           return;
@@ -124,21 +157,28 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                     value={input}
                     onChange={(event) => {
-                      handleInputChange?.(event);
+                      if (!isReadOnly) {
+                        handleInputChange?.(event);
+                      }
                     }}
                     style={{
                       minHeight: TEXTAREA_MIN_HEIGHT,
                       maxHeight: TEXTAREA_MAX_HEIGHT,
                     }}
-                    placeholder="How can Bolt help you today?"
+                    placeholder={isReadOnly ? 'Log in to continue the conversation...' : 'How can Bolt help you today?'}
                     translate="no"
+                    disabled={isReadOnly}
                   />
                   <ClientOnly>
                     {() => (
                       <SendButton
-                        show={input.length > 0 || isStreaming}
+                        show={!isReadOnly && (input.length > 0 || isStreaming)}
                         isStreaming={isStreaming}
                         onClick={(event) => {
+                          if (isReadOnly) {
+                            return;
+                          }
+
                           if (isStreaming) {
                             handleStop?.();
                             return;
@@ -153,13 +193,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <div className="flex gap-1 items-center">
                       <IconButton
                         title="Enhance prompt"
-                        disabled={input.length === 0 || enhancingPrompt}
+                        disabled={isReadOnly || input.length === 0 || enhancingPrompt}
                         className={classNames({
                           'opacity-100!': enhancingPrompt,
                           'text-bolt-elements-item-contentAccent! pr-1.5 enabled:hover:bg-bolt-elements-item-backgroundAccent!':
                             promptEnhanced,
                         })}
-                        onClick={() => enhancePrompt?.()}
+                        onClick={() => {
+                          if (!isReadOnly) {
+                            enhancePrompt?.();
+                          }
+                        }}
                       >
                         {enhancingPrompt ? (
                           <>
@@ -174,7 +218,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         )}
                       </IconButton>
                     </div>
-                    {input.length > 3 ? (
+                    {!isReadOnly && input.length > 3 ? (
                       <div className="text-xs text-bolt-elements-textTertiary">
                         Use <kbd className="kdb">Shift</kbd> + <kbd className="kdb">Return</kbd> for a new line
                       </div>
@@ -192,9 +236,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <button
                         key={index}
                         onClick={(event) => {
-                          sendMessage?.(event, examplePrompt.text);
+                          if (!isReadOnly) {
+                            sendMessage?.(event, examplePrompt.text);
+                          }
                         }}
                         className="group flex items-center w-full gap-2 justify-center bg-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-theme"
+                        disabled={isReadOnly}
                       >
                         {examplePrompt.text}
                         <div className="i-ph:arrow-bend-down-left" />

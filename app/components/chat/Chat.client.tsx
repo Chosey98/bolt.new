@@ -4,8 +4,9 @@ import { useChat } from 'ai/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
+import { useLoaderData } from '@remix-run/react';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
-import { useChatHistory } from '~/lib/persistence';
+import { useChatPersistence } from '~/lib/hooks/useChatPersistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { fileModificationsToHTML } from '~/utils/diff';
@@ -23,11 +24,20 @@ const logger = createScopedLogger('Chat');
 export function Chat() {
   renderLogger.trace('Chat');
 
-  const { ready, initialMessages, storeMessageHistory } = useChatHistory();
+  const { ready, initialMessages, storeMessageHistory } = useChatPersistence();
+  const { userId, chat } = useLoaderData<{ userId: string | null; chat: any }>();
+
+  /**
+   * Determine if this is a read-only session
+   * Read-only if: viewing someone else's chat OR not authenticated (for new chats)
+   */
+  const isReadOnly = (chat && chat.userId && chat.userId !== userId) || (!userId && !chat);
 
   return (
     <>
-      {ready && <ChatImpl initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && (
+        <ChatImpl initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} isReadOnly={isReadOnly} />
+      )}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -62,9 +72,10 @@ export function Chat() {
 interface ChatProps {
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
+  isReadOnly?: boolean;
 }
 
-export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProps) => {
+export const ChatImpl = memo(({ initialMessages, storeMessageHistory, isReadOnly = false }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -97,12 +108,18 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   }, []);
 
   useEffect(() => {
-    parseMessages(messages, isLoading);
+    /**
+     * For initial messages, don't execute actions to prevent command replay.
+     * For new messages (when messages.length > initialMessages.length), execute actions.
+     */
+    const shouldExecuteActions = messages.length > initialMessages.length;
 
-    if (messages.length > initialMessages.length) {
+    parseMessages(messages, isLoading, shouldExecuteActions);
+
+    if (messages.length > initialMessages.length && !isReadOnly) {
       storeMessageHistory(messages).catch((error) => toast.error(error.message));
     }
-  }, [messages, isLoading, parseMessages]);
+  }, [messages, isLoading, parseMessages, isReadOnly, initialMessages.length]);
 
   const scrollTextArea = () => {
     const textarea = textareaRef.current;
@@ -147,6 +164,12 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   };
 
   const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+    // prevent sending messages in read-only mode
+    if (isReadOnly) {
+      toast.error('You need to be logged in to send messages. Please log in to continue the conversation.');
+      return;
+    }
+
     const _input = messageInput || input;
 
     if (_input.length === 0 || isLoading) {
@@ -211,8 +234,9 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       sendMessage={sendMessage}
       messageRef={messageRef}
       scrollRef={scrollRef}
-      handleInputChange={handleInputChange}
+      handleInputChange={isReadOnly ? undefined : handleInputChange}
       handleStop={abort}
+      isReadOnly={isReadOnly}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {
           return message;
@@ -224,6 +248,11 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
         };
       })}
       enhancePrompt={() => {
+        if (isReadOnly) {
+          toast.error('You need to be logged in to enhance prompts. Please log in to continue.');
+          return;
+        }
+
         enhancePrompt(input, (input) => {
           setInput(input);
           scrollTextArea();

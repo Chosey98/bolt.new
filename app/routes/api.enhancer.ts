@@ -1,21 +1,25 @@
-import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { StreamingTextResponse, parseStreamPart } from 'ai';
-import { streamText } from '~/lib/.server/llm/stream-text';
+import { type ActionFunctionArgs } from '@remix-run/node';
+import Anthropic from '@anthropic-ai/sdk';
+import { env } from 'node:process';
 import { stripIndents } from '~/utils/stripIndent';
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+export async function action({ request }: ActionFunctionArgs) {
+  const { message } = await request.json();
 
-export async function action(args: ActionFunctionArgs) {
-  return enhancerAction(args);
-}
+  const apiKey = env.ANTHROPIC_API_KEY;
 
-async function enhancerAction({ context, request }: ActionFunctionArgs) {
-  const { message } = await request.json<{ message: string }>();
+  if (!apiKey) {
+    throw new Response('ANTHROPIC_API_KEY is required', { status: 500 });
+  }
 
   try {
-    const result = await streamText(
-      [
+    const anthropic = new Anthropic({ apiKey });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20240620',
+      max_tokens: 8192,
+      temperature: 0,
+      messages: [
         {
           role: 'user',
           content: stripIndents`
@@ -29,32 +33,21 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
         `,
         },
       ],
-      context.cloudflare.env,
-    );
-
-    const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        const processedChunk = decoder
-          .decode(chunk)
-          .split('\n')
-          .filter((line) => line !== '')
-          .map(parseStreamPart)
-          .map((part) => part.value)
-          .join('');
-
-        controller.enqueue(encoder.encode(processedChunk));
-      },
     });
 
-    const transformedStream = result.toAIStream().pipeThrough(transformStream);
+    const content = response.content[0];
 
-    return new StreamingTextResponse(transformedStream);
+    if (content.type === 'text') {
+      return new Response(content.text, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+
+    return new Response('No text content received', { status: 500 });
   } catch (error) {
-    console.log(error);
-
-    throw new Response(null, {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    console.error('Enhancer API error:', error);
+    return new Response('Internal Server Error', { status: 500 });
   }
 }

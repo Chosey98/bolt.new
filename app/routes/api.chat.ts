@@ -1,59 +1,70 @@
-import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
-import { CONTINUE_PROMPT } from '~/lib/.server/llm/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
-import SwitchableStream from '~/lib/.server/llm/switchable-stream';
+import { type ActionFunctionArgs } from '@remix-run/node';
+import Anthropic from '@anthropic-ai/sdk';
+import { env } from 'node:process';
+import { getSystemPrompt } from '~/lib/.server/llm/prompts';
+import { MAX_TOKENS } from '~/lib/.server/llm/constants';
 
-export async function action(args: ActionFunctionArgs) {
-  return chatAction(args);
-}
+export async function action({ request }: ActionFunctionArgs) {
+  const { messages } = await request.json();
 
-async function chatAction({ context, request }: ActionFunctionArgs) {
-  const { messages } = await request.json<{ messages: Messages }>();
+  const apiKey = env.ANTHROPIC_API_KEY;
 
-  const stream = new SwitchableStream();
+  if (!apiKey) {
+    throw new Response('ANTHROPIC_API_KEY is required', { status: 500 });
+  }
 
   try {
-    const options: StreamingOptions = {
-      toolChoice: 'none',
-      onFinish: async ({ text: content, finishReason }) => {
-        if (finishReason !== 'length') {
-          return stream.close();
+    const anthropic = new Anthropic({ apiKey });
+
+    // create a streaming response that follows the AI SDK data stream protocol
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const response = await anthropic.messages.stream({
+            model: 'claude-3-5-sonnet-20240620',
+            system: getSystemPrompt(),
+            max_tokens: MAX_TOKENS,
+            temperature: 0,
+            messages: messages.map((msg: any) => ({
+              role: msg.role,
+              content: msg.content,
+            })),
+          });
+
+          for await (const chunk of response) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              // format as AI SDK data stream protocol: text part
+              const textPart = `0:${JSON.stringify(chunk.delta.text)}\n`;
+              controller.enqueue(new TextEncoder().encode(textPart));
+            }
+          }
+
+          // send finish message
+          const finishPart = `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+          controller.enqueue(new TextEncoder().encode(finishPart));
+
+          controller.close();
+        } catch (error) {
+          console.error('Streaming error:', error);
+          controller.error(error);
         }
-
-        if (stream.switches >= MAX_RESPONSE_SEGMENTS) {
-          throw Error('Cannot continue message: Maximum segments reached');
-        }
-
-        const switchesLeft = MAX_RESPONSE_SEGMENTS - stream.switches;
-
-        console.log(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
-
-        messages.push({ role: 'assistant', content });
-        messages.push({ role: 'user', content: CONTINUE_PROMPT });
-
-        const result = await streamText(messages, context.cloudflare.env, options);
-
-        return stream.switchSource(result.toAIStream());
       },
-    };
+    });
 
-    const result = await streamText(messages, context.cloudflare.env, options);
-
-    stream.switchSource(result.toAIStream());
-
-    return new Response(stream.readable, {
-      status: 200,
+    return new Response(stream, {
       headers: {
-        contentType: 'text/plain; charset=utf-8',
+        'Content-Type': 'text/plain; charset=utf-8',
+        'x-vercel-ai-data-stream': 'v1',
       },
     });
   } catch (error) {
-    console.log(error);
-
-    throw new Response(null, {
-      status: 500,
-      statusText: 'Internal Server Error',
+    console.error('Chat API error:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
     });
+
+    return new Response('Internal Server Error', { status: 500 });
   }
 }

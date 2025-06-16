@@ -1,9 +1,11 @@
-import { type PlatformProxy } from 'wrangler';
+// load context for Node.js deployment
+export interface Env {
+  ANTHROPIC_API_KEY?: string;
+  [key: string]: any;
+}
 
-type Cloudflare = Omit<PlatformProxy<Env>, 'dispose'>;
-
-declare module '@remix-run/cloudflare' {
+declare module '@remix-run/node' {
   interface AppLoadContext {
-    cloudflare: Cloudflare;
+    env: Env;
   }
 }

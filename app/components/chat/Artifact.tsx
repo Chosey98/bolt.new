@@ -120,6 +120,25 @@ function ShellCodeBlock({ classsName, code }: ShellCodeBlockProps) {
   );
 }
 
+interface ShellOutputProps {
+  className?: string;
+  output: string;
+}
+
+function ShellOutput({ className, output }: ShellOutputProps) {
+  if (!output.trim()) {
+    return null;
+  }
+
+  return (
+    <div
+      className={classNames('text-xs font-mono bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto', className)}
+    >
+      <pre className="whitespace-pre-wrap">{output}</pre>
+    </div>
+  );
+}
+
 interface ActionListProps {
   actions: ActionState[];
 }
@@ -174,12 +193,23 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                 ) : null}
               </div>
               {type === 'shell' && (
-                <ShellCodeBlock
-                  classsName={classNames('mt-1', {
-                    'mb-3.5': !isLast,
-                  })}
-                  code={content}
-                />
+                <>
+                  <ShellCodeBlock
+                    classsName={classNames('mt-1', {
+                      'mb-2': !!(action.output && action.output.trim()),
+                      'mb-3.5': !isLast && (!action.output || !action.output.trim()),
+                    })}
+                    code={content}
+                  />
+                  {action.output && action.output.trim() && (
+                    <ShellOutput
+                      className={classNames({
+                        'mb-3.5': !isLast,
+                      })}
+                      output={action.output}
+                    />
+                  )}
+                </>
               )}
             </motion.li>
           );

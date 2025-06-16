@@ -17,7 +17,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: postgres -c 'password_encryption=scram-sha-256'
+    command: >
+      bash -c "
+        echo 'local   all             all                                     scram-sha-256' > /var/lib/postgresql/data/pg_hba.conf &&
+        echo 'host    all             all             127.0.0.1/32            scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf &&
+        echo 'host    all             all             ::1/128                 scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf &&
+        echo 'host    all             all             0.0.0.0/0               scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf &&
+        postgres -c 'password_encryption=scram-sha-256' -c 'listen_addresses=*'
+      "
 
   bolt:
     build: .

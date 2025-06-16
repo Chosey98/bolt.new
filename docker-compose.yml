@@ -7,6 +7,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-bolt}
       POSTGRES_USER: ${POSTGRES_USER:-bolt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bolt_password_change_in_production}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -16,16 +17,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    command: postgres -c 'password_encryption=scram-sha-256'
 
   bolt:
     build: .
     ports:
       - '3005:3000'
     environment:
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-bolt}:${POSTGRES_PASSWORD:-bolt_password_change_in_production}@postgres:5432/${POSTGRES_DB:-bolt}}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SESSION_SECRET=${SESSION_SECRET:-bolt-super-secret-session-key-change-in-production-12345}
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bolt}:${POSTGRES_PASSWORD:-bolt_password_change_in_production}@postgres:5432/${POSTGRES_DB:-bolt}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SESSION_SECRET: ${SESSION_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

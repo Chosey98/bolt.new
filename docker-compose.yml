@@ -26,7 +26,22 @@ services:
           echo 'Please set POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD'
           exit 1
         fi &&
-        docker-entrypoint.sh postgres -c 'password_encryption=scram-sha-256' -c 'listen_addresses=*'
+        if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+          echo 'Initializing new database...' &&
+          initdb -D /var/lib/postgresql/data &&
+          echo 'host    all             all             0.0.0.0/0               scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf &&
+          echo 'local   all             all                                     scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf
+        else
+          echo 'Using existing database...' &&
+          if ! psql -U postgres -c \"SELECT 1 FROM pg_roles WHERE rolname='$$POSTGRES_USER'\" | grep -q 1; then
+            echo 'Creating user $$POSTGRES_USER...' &&
+            psql -U postgres -c \"CREATE USER $$POSTGRES_USER WITH PASSWORD '$$POSTGRES_PASSWORD';\" &&
+            psql -U postgres -c \"ALTER USER $$POSTGRES_USER WITH SUPERUSER;\" &&
+            psql -U postgres -c \"CREATE DATABASE $$POSTGRES_DB OWNER $$POSTGRES_USER;\" &&
+            psql -U postgres -c \"GRANT ALL PRIVILEGES ON DATABASE $$POSTGRES_DB TO $$POSTGRES_USER;\"
+          fi
+        fi &&
+        postgres -c 'password_encryption=scram-sha-256' -c 'listen_addresses=*'
       "
 
   bolt:

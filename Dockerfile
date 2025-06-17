@@ -30,41 +30,35 @@ FROM node:20-alpine AS production
 RUN npm install -g pnpm@9.4.0 && \
     apk add --no-cache wget openssl postgresql-client
 
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package.json ./
-
-# Install production dependencies (including vite-plugin-node-polyfills which is needed at runtime)
-RUN pnpm install --no-frozen-lockfile --prod
-
-# Install vite-plugin-node-polyfills specifically as it's needed at runtime
-RUN pnpm add vite-plugin-node-polyfills
-
-# Copy built application and necessary files
-COPY --from=base /app/build ./build
-COPY --from=base /app/public ./public
-COPY --from=base /app/app ./app
-
-# Copy Prisma files and generated client
-COPY --from=base /app/prisma ./prisma
-COPY --from=base /app/node_modules/.pnpm/@prisma+client* ./node_modules/.pnpm/
-
-# Copy configuration files
-COPY vite.config.ts tsconfig.json uno.config.ts ./
-COPY load-context.ts worker-configuration.d.ts ./
-
-# Copy startup script
-COPY start.sh ./
-RUN chmod +x start.sh
-
-# Create non-root user
+# Create non-root user first
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S bolt -u 1001 -G nodejs
 
-# Change ownership of app directory
-RUN chown -R bolt:nodejs /app
+# Set working directory and change ownership
+WORKDIR /app
+RUN chown bolt:nodejs /app
+
+# Copy package files and install dependencies as the correct user
+COPY --chown=bolt:nodejs package.json ./
+RUN pnpm install --no-frozen-lockfile --prod && \
+    pnpm add vite-plugin-node-polyfills
+
+# Copy built application and necessary files with correct ownership
+COPY --chown=bolt:nodejs --from=base /app/build ./build
+COPY --chown=bolt:nodejs --from=base /app/public ./public
+COPY --chown=bolt:nodejs --from=base /app/app ./app
+
+# Copy Prisma files and generated client with correct ownership
+COPY --chown=bolt:nodejs --from=base /app/prisma ./prisma
+COPY --chown=bolt:nodejs --from=base /app/node_modules/.pnpm/@prisma+client* ./node_modules/.pnpm/
+
+# Copy configuration files with correct ownership
+COPY --chown=bolt:nodejs vite.config.ts tsconfig.json uno.config.ts ./
+COPY --chown=bolt:nodejs load-context.ts worker-configuration.d.ts ./
+
+# Copy startup script with correct ownership
+COPY --chown=bolt:nodejs start.sh ./
+RUN chmod +x start.sh
 
 USER bolt
 

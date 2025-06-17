@@ -11,6 +11,15 @@ export POSTGRES_USER="${POSTGRES_USER:-bolt}"
 export POSTGRES_DB="${POSTGRES_DB:-bolt}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-bolt_password_change_in_production}"
 
+echo "Database connection details:"
+echo "---------------------------"
+echo "Host: $POSTGRES_HOST"
+echo "Port: $POSTGRES_PORT"
+echo "User: $POSTGRES_USER"
+echo "Database: $POSTGRES_DB"
+echo "Database URL: $DATABASE_URL"
+echo "---------------------------"
+
 echo "Waiting for database to be ready..."
 # Wait for PostgreSQL to be ready
 until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER"; do

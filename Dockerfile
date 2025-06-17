@@ -18,7 +18,7 @@ RUN pnpm install --no-frozen-lockfile
 COPY . .
 
 # Generate Prisma client
-RUN pnpm db:generate
+RUN pnpm prisma generate
 
 # Build the application
 RUN pnpm run build
@@ -59,6 +59,9 @@ COPY --chown=bolt:nodejs load-context.ts worker-configuration.d.ts ./
 # Copy startup script with correct ownership
 COPY --chown=bolt:nodejs start.sh ./
 RUN chmod +x start.sh
+
+# Generate Prisma client in production stage
+RUN pnpm prisma generate
 
 USER bolt
 

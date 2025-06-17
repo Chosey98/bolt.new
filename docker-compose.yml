@@ -13,10 +13,12 @@ services:
     ports:
       - '5432:5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bolt} -d ${POSTGRES_DB:-bolt}']
-      interval: 10s
-      timeout: 5s
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bolt} -d ${POSTGRES_DB:-bolt} || exit 1']
+      interval: 30s
+      timeout: 10s
       retries: 5
+      start_period: 40s
+    user: postgres
     command: >
       bash -c "
         echo 'local   all             all                                     scram-sha-256' > /var/lib/postgresql/data/pg_hba.conf &&
